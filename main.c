@@ -6,58 +6,44 @@
 #include "shell.h"
 
 int main(int argc, char **argv) {
-    pid_t childPid;
+    int childPid;
     char *cmdLine;
     parseInfo *info;
     
-    // Main shell loop
     while (1) {
-        // Display prompt and read command
-        cmdLine = readline("> ");
-        
-        // Handle EOF or errors
-        if (cmdLine == NULL) {
-            printf("Exiting shell...\n");
-            break;
-        }
-        
-        // Skip empty commands
-        if (strlen(cmdLine) == 0) {
-            free(cmdLine);
-            continue;
-        }
-        
-        // Parse the command
+        cmdLine = readline("mysh> ");
         info = parse(cmdLine);
-        
-        // Handle built-in commands
-        if (info->args[0] != NULL && is_builtin_command(info->args[0])) {
-            execute_builtin_command(info);
-            free_parse_info(info);
+
+        // Skip empty commands
+        if (info->size == 0) {
             free(cmdLine);
+            free_parse_info(info);
             continue;
         }
-        
-        // Fork a child process
+
+        // Handle built-in commands without forking
+        if (isBuiltInCommand(info)) {
+            executeBuiltInCommand(info);
+            free(cmdLine);
+            free_parse_info(info);
+            continue;
+        }
+
+        // Fork for external commands
         childPid = fork();
         
         if (childPid == 0) {
-            // Child process
+            /* child code */
             executeCommand(info);
-            // If executeCommand returns, there was an error
-            exit(EXIT_FAILURE);
-        } else if (childPid < 0) {
-            // Fork failed
-            perror("fork");
+            exit(EXIT_SUCCESS);  // In case execvp fails
         } else {
-            // Parent process
-            int status;
-            waitpid(childPid, &status, 0);
+            /* parent code */
+            waitpid(childPid, NULL, 0);
         }
         
-        // Free memory
-        free_parse_info(info);
+        // Free allocated memory
         free(cmdLine);
+        free_parse_info(info);
     }
     
     return 0;
